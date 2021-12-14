@@ -156,6 +156,20 @@ public class OtlpProtobufUtilsTest {
     }
 
     @Test
+    public void handlesSpecialCaseAnnotations() {
+      /*
+       A `source` tag at the span-level will override an explicit source that is set via
+       `wfSpanBuilder.setSource(...)`, which arguably seems like a bug. Since we determine the WF
+       source in `sourceAndResourceAttrs()`, rename any remaining OTLP Attribute to `_source`.
+       */
+      List<KeyValue> attrs = Collections.singletonList(otlpAttribute("source", "a-source"));
+
+      List<Annotation> actual = OtlpProtobufUtils.annotationsFromAttributes(attrs);
+
+      assertThat(actual, hasItem(new Annotation("_source", "a-source")));
+    }
+
+    @Test
     public void testRequiredTags() {
       List<Annotation> wfAnnotations = OtlpProtobufUtils.setRequiredTags(Collections.emptyList());
       Map<String, String> annotations = getWfAnnotationAsMap(wfAnnotations);
@@ -411,7 +425,7 @@ public class OtlpProtobufUtilsTest {
 
       assertEquals("a-src", actual.getSource());
       assertThat(actual.getAnnotations(), not(hasItem(new Annotation("source", "a-src"))));
-      assertThat(actual.getAnnotations(), hasItem(new Annotation("source", "span-level")));
+      assertThat(actual.getAnnotations(), hasItem(new Annotation("_source", "span-level")));
     }
 
     @Test

@@ -225,7 +225,9 @@ public class OtlpProtobufUtils {
   public static List<Annotation> annotationsFromAttributes(List<KeyValue> attributesList) {
     List<Annotation> annotations = Lists.newArrayList();
     for (KeyValue attribute : attributesList) {
-      Annotation.Builder annotationBuilder = Annotation.newBuilder().setKey(attribute.getKey());
+      String key = attribute.getKey().equals(SOURCE_KEY) ? "_source" : attribute.getKey();
+      Annotation.Builder annotationBuilder = Annotation.newBuilder().setKey(key);
+
       if (!attribute.hasValue()) {
         annotationBuilder.setValue("");
       } else {
@@ -233,6 +235,7 @@ public class OtlpProtobufUtils {
       }
       annotations.add(annotationBuilder.build());
     }
+
     return annotations;
   }
 
