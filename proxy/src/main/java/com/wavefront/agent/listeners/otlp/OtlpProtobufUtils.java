@@ -111,24 +111,20 @@ public class OtlpProtobufUtils {
 
     for (ResourceSpans rSpans : request.getResourceSpansList()) {
       Resource resource = rSpans.getResource();
-      if (OTLP_DATA_LOGGER.isLoggable(Level.FINEST)) {
-        OTLP_DATA_LOGGER.info("Inbound OTLP Resource: " + resource);
-      }
+      log(Level.INFO, "Inbound OTLP Resource: " + resource);
 
       for (InstrumentationLibrarySpans ilSpans : rSpans.getInstrumentationLibrarySpansList()) {
-        if (OTLP_DATA_LOGGER.isLoggable(Level.FINEST)) {
-          OTLP_DATA_LOGGER.info("Inbound OTLP Instrumentation Library: " +
-              ilSpans.getInstrumentationLibrary());
-        }
+        log(Level.INFO, "Inbound OTLP Instrumentation Library: " +
+            ilSpans.getInstrumentationLibrary());
 
         for (io.opentelemetry.proto.trace.v1.Span otlpSpan : ilSpans.getSpansList()) {
-          Pair<Span, SpanLogs> pair = transformAll(otlpSpan, resource.getAttributesList(),
-              preprocessor, defaultSource);
-          if (OTLP_DATA_LOGGER.isLoggable(Level.FINEST)) {
-            OTLP_DATA_LOGGER.info("Inbound OTLP Span: " + otlpSpan);
-            OTLP_DATA_LOGGER.info("Converted Wavefront Span: " + pair._1);
-            if (!pair._2.getLogs().isEmpty())
-              OTLP_DATA_LOGGER.info("Converted Wavefront SpanLogs: " + pair._2);
+          log(Level.INFO, "Inbound OTLP Span: " + otlpSpan);
+
+          Pair<Span, SpanLogs> pair =
+              transformAll(otlpSpan, resource.getAttributesList(), preprocessor, defaultSource);
+          log(Level.INFO, "Converted Wavefront Span: " + pair._1);
+          if (!pair._2.getLogs().isEmpty()) {
+            log(Level.INFO, "Converted Wavefront SpanLogs: " + pair._2);
           }
 
           wfSpansAndLogs.add(pair);
@@ -365,12 +361,16 @@ public class OtlpProtobufUtils {
       return values.stream().map(OtlpProtobufUtils::fromAnyValue)
           .collect(Collectors.joining(", ", "[", "]"));
     } else if (anyValue.hasKvlistValue()) {
-      if (OTLP_DATA_LOGGER.isLoggable(Level.FINEST)) {
-        OTLP_DATA_LOGGER.severe("Encountered KvlistValue but cannot convert to String");
-      }
+      log(Level.SEVERE, "Encountered KvlistValue but cannot convert to String");
     } else if (anyValue.hasBytesValue()) {
       return Base64.getEncoder().encodeToString(anyValue.getBytesValue().toByteArray());
     }
     return "<Unknown OpenTelemetry attribute value type " + anyValue.getValueCase() + ">";
+  }
+
+  private static void log(Level level, String message) {
+    if (OTLP_DATA_LOGGER.isLoggable(Level.FINEST)) {
+      OTLP_DATA_LOGGER.log(level, message);
+    }
   }
 }
