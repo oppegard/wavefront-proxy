@@ -45,6 +45,8 @@ import wavefront.report.Span;
 import wavefront.report.SpanLog;
 import wavefront.report.SpanLogs;
 
+import static com.wavefront.agent.listeners.FeatureCheckUtils.SPANLOGS_DISABLED;
+import static com.wavefront.agent.listeners.FeatureCheckUtils.isFeatureDisabled;
 import static com.wavefront.common.TraceConstants.PARENT_KEY;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.ERROR_SPAN_TAG_VAL;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.reportWavefrontGeneratedData;
@@ -89,6 +91,7 @@ public class OtlpProtobufUtils {
                                        ReportableEntityHandler<Span, String> spanHandler,
                                        ReportableEntityHandler<SpanLogs, String> spanLogsHandler,
                                        @Nullable Supplier<ReportableEntityPreprocessor> preprocessorSupplier,
+                                       Pair<Supplier<Boolean>, Counter> spanLogsDisabled,
                                        Pair<SpanSampler, Counter> samplerAndCounter,
                                        String defaultSource,
                                        Set<Pair<Map<String, String>, String>> discoveredHeartbeatMetrics,
@@ -100,20 +103,22 @@ public class OtlpProtobufUtils {
     }
 
     for (Pair<Span, SpanLogs> spanAndLogs : fromOtlpRequest(request, preprocessor, defaultSource)) {
-      if (wasFilteredByPreprocessor(spanAndLogs._1, spanHandler, preprocessor)) {
-        continue;
-      }
+      Span span = spanAndLogs._1;
+      SpanLogs spanLogs = spanAndLogs._2;
 
-      if (samplerAndCounter._1.sample(spanAndLogs._1, samplerAndCounter._2)) {
-        spanHandler.report(spanAndLogs._1);
-        if (!spanAndLogs._2.getLogs().isEmpty()) {
-          spanLogsHandler.report(spanAndLogs._2);
+      if (wasFilteredByPreprocessor(span, spanHandler, preprocessor)) continue;
+
+      if (samplerAndCounter._1.sample(span, samplerAndCounter._2)) {
+        spanHandler.report(span);
+
+        if (shouldReportSpanLogs(spanLogs.getLogs().size(), spanLogsDisabled)) {
+          spanLogsHandler.report(spanLogs);
         }
       }
 
       // always report RED metrics irrespective of span sampling
       discoveredHeartbeatMetrics.add(
-          reportREDMetrics(spanAndLogs._1, internalReporter, traceDerivedCustomTagKeys)
+          reportREDMetrics(span, internalReporter, traceDerivedCustomTagKeys)
       );
     }
   }
@@ -321,9 +326,9 @@ public class OtlpProtobufUtils {
     List<Annotation> annotations = new ArrayList<>();
 
     // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/sdk_exporters/non-otlp.md
-    annotations.add(new Annotation("otel.library.name", iLibrary.getName()));
+    annotations.add(new Annotation("otel.scope.name", iLibrary.getName()));
     if (!iLibrary.getVersion().isEmpty()) {
-      annotations.add(new Annotation("otel.library.version", iLibrary.getVersion()));
+      annotations.add(new Annotation("otel.scope.version", iLibrary.getVersion()));
     }
 
     return annotations;
@@ -398,6 +403,20 @@ public class OtlpProtobufUtils {
     }
 
     return requiredTags;
+  }
+
+  static long getSpansCount(ExportTraceServiceRequest request) {
+    return request.getResourceSpansList().stream()
+        .flatMapToLong(r -> r.getInstrumentationLibrarySpansList().stream()
+            .mapToLong(InstrumentationLibrarySpans::getSpansCount))
+        .sum();
+  }
+
+  @VisibleForTesting
+  static boolean shouldReportSpanLogs(int logsCount,
+                                              Pair<Supplier<Boolean>, Counter> spanLogsDisabled) {
+    return logsCount > 0 && !isFeatureDisabled(spanLogsDisabled._1, SPANLOGS_DISABLED,
+        spanLogsDisabled._2, logsCount);
   }
 
   private static Map<String, String> mapFromAttributes(List<KeyValue> attributes) {

@@ -42,6 +42,8 @@ import wavefront.report.SpanLogs;
 
 import static com.wavefront.agent.channel.ChannelUtils.errorMessageWithRootCause;
 import static com.wavefront.agent.channel.ChannelUtils.writeHttpResponse;
+import static com.wavefront.agent.listeners.FeatureCheckUtils.SPAN_DISABLED;
+import static com.wavefront.agent.listeners.FeatureCheckUtils.isFeatureDisabled;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.TRACING_DERIVED_PREFIX;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.reportHeartbeats;
 
@@ -58,6 +60,9 @@ public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeabl
   private final WavefrontSender sender;
   private final ReportableEntityHandler<SpanLogs, String> spanLogsHandler;
   private final Set<String> traceDerivedCustomTagKeys;
+  private final Counter receivedSpans;
+  private final Pair<Supplier<Boolean>, Counter> spansDisabled;
+  private final Pair<Supplier<Boolean>, Counter> spanLogsDisabled;
 
   public OtlpHttpHandler(ReportableEntityHandlerFactory handlerFactory,
                          @Nullable TokenAuthenticator tokenAuthenticator,
@@ -66,6 +71,8 @@ public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeabl
                          @Nullable WavefrontSender wfSender,
                          @Nullable Supplier<ReportableEntityPreprocessor> preprocessorSupplier,
                          SpanSampler sampler,
+                         Supplier<Boolean> spansFeatureDisabled,
+                         Supplier<Boolean> spanLogsFeatureDisabled,
                          String defaultSource,
                          Set<String> traceDerivedCustomTagKeys) {
     super(tokenAuthenticator, healthCheckManager, handle);
@@ -74,11 +81,17 @@ public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeabl
         handlerFactory.getHandler(HandlerKey.of(ReportableEntityType.TRACE_SPAN_LOGS, handle));
     this.sender = wfSender;
     this.preprocessorSupplier = preprocessorSupplier;
-    this.spanSamplerAndCounter = Pair.of(sampler,
-        Metrics.newCounter(new MetricName("spans." + handle, "", "sampler.discarded")));
     this.defaultSource = defaultSource;
     this.traceDerivedCustomTagKeys = traceDerivedCustomTagKeys;
+
     this.discoveredHeartbeatMetrics = Sets.newConcurrentHashSet();
+    this.receivedSpans = Metrics.newCounter(new MetricName("spans." + handle, "", "received.total"));
+    this.spanSamplerAndCounter = Pair.of(sampler,
+        Metrics.newCounter(new MetricName("spans." + handle, "", "sampler.discarded")));
+    this.spansDisabled = Pair.of(spansFeatureDisabled,
+        Metrics.newCounter(new MetricName("spans." + handle, "", "discarded")));
+    this.spanLogsDisabled = Pair.of(spanLogsFeatureDisabled,
+        Metrics.newCounter(new MetricName("spanLogs." + handle, "", "discarded")));
 
     this.scheduledExecutorService =
         Executors.newScheduledThreadPool(1, new NamedThreadFactory("otlp-http-heart-beater"));
@@ -103,9 +116,18 @@ public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeabl
     try {
       ExportTraceServiceRequest otlpRequest =
           ExportTraceServiceRequest.parseFrom(request.content().nioBuffer());
+      long spanCount = OtlpProtobufUtils.getSpansCount(otlpRequest);
+      receivedSpans.inc(spanCount);
+
+      if (isFeatureDisabled(spansDisabled._1, SPAN_DISABLED, spansDisabled._2, spanCount)) {
+        writeHttpResponse(ctx, HttpResponseStatus.ACCEPTED, SPAN_DISABLED, request);
+        return;
+      }
+
       OtlpProtobufUtils.exportToWavefront(
-          otlpRequest, spanHandler, spanLogsHandler, preprocessorSupplier, spanSamplerAndCounter,
-          defaultSource, discoveredHeartbeatMetrics, internalReporter, traceDerivedCustomTagKeys
+          otlpRequest, spanHandler, spanLogsHandler, preprocessorSupplier, spanLogsDisabled,
+          spanSamplerAndCounter, defaultSource, discoveredHeartbeatMetrics, internalReporter,
+          traceDerivedCustomTagKeys
       );
       /*
       We use HTTP 200 for success and HTTP 400 for errors, mirroring what we found in
