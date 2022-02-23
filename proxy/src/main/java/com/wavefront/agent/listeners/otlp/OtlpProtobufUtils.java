@@ -127,11 +127,9 @@ public class OtlpProtobufUtils {
   //   wfSender. This could be more efficient, and also more reliable in the event the loops
   //   below throw an error and we don't report any of the list.
   @VisibleForTesting
-  static List<Pair<Span, SpanLogs>> fromOtlpRequest(
-      ExportTraceServiceRequest request,
-      @Nullable ReportableEntityPreprocessor preprocessor,
-      String defaultSource
-  ) {
+  static List<Pair<Span, SpanLogs>> fromOtlpRequest(ExportTraceServiceRequest request,
+                                                    @Nullable ReportableEntityPreprocessor preprocessor,
+                                                    String defaultSource) {
     List<Pair<Span, SpanLogs>> wfSpansAndLogs = Lists.newArrayList();
 
     for (ResourceSpans rSpans : request.getResourceSpansList()) {
@@ -254,7 +252,7 @@ public class OtlpProtobufUtils {
 
   @VisibleForTesting
   static SpanLogs transformEvents(io.opentelemetry.proto.trace.v1.Span otlpSpan,
-                                         Span wfSpan) {
+                                  Span wfSpan) {
     ArrayList<SpanLog> logs = new ArrayList<>();
 
     for (io.opentelemetry.proto.trace.v1.Span.Event event : otlpSpan.getEventsList()) {
@@ -281,7 +279,7 @@ public class OtlpProtobufUtils {
   // with the removal of the KeyValue determined to be the source.
   @VisibleForTesting
   static Pair<String, List<KeyValue>> sourceFromAttributes(List<KeyValue> otlpAttributes,
-                                                                  String defaultSource) {
+                                                           String defaultSource) {
     // Order of keys in List matters: it determines precedence when multiple candidates exist.
     List<String> candidateKeys = Arrays.asList(SOURCE_KEY, "host.name", "hostname", "host.id");
     Comparator<KeyValue> keySorter = Comparator.comparing(kv -> candidateKeys.indexOf(kv.getKey()));
@@ -354,11 +352,9 @@ public class OtlpProtobufUtils {
   }
 
   @VisibleForTesting
-  static Pair<Map<String, String>, String> reportREDMetrics(
-      Span span,
-      WavefrontInternalReporter internalReporter,
-      Set<String> traceDerivedCustomTagKeys
-  ) {
+  static Pair<Map<String, String>, String> reportREDMetrics(Span span,
+                                                            WavefrontInternalReporter internalReporter,
+                                                            Set<String> traceDerivedCustomTagKeys) {
     Map<String, String> annotations = mapFromAnnotations(span.getAnnotations());
     List<Pair<String, String>> spanTags = span.getAnnotations().stream()
         .map(a -> Pair.of(a.getKey(), a.getValue())).collect(Collectors.toList());
@@ -414,7 +410,7 @@ public class OtlpProtobufUtils {
 
   @VisibleForTesting
   static boolean shouldReportSpanLogs(int logsCount,
-                                              Pair<Supplier<Boolean>, Counter> spanLogsDisabled) {
+                                      Pair<Supplier<Boolean>, Counter> spanLogsDisabled) {
     return logsCount > 0 && !isFeatureDisabled(spanLogsDisabled._1, SPANLOGS_DISABLED,
         spanLogsDisabled._2, logsCount);
   }
