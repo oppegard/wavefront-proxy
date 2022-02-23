@@ -70,6 +70,7 @@ public class OtlpGrpcTraceHandlerTest {
         null);
     otlpGrpcTraceHandler.export(otlpRequest, emptyStreamObserver);
     otlpGrpcTraceHandler.run();
+    otlpGrpcTraceHandler.close();
 
     // 3. Assert
     EasyMock.verify(mockSampler, mockSpanHandler, mockSpanLogsHandler, mockSender);

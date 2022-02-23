@@ -82,6 +82,7 @@ public class OtlpHttpHandlerTest {
 
     handler.handleHttpMessage(mockCtx, request);
     handler.run();
+    handler.close();
 
     EasyMock.verify(mockSampler, mockSender);
     HashMap<String, String> actualHeartbeatTags = heartbeatTagsCapture.getValue();
