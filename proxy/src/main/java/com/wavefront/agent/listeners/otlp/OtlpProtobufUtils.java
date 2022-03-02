@@ -87,6 +87,24 @@ public class OtlpProtobufUtils {
         put(SpanKind.UNRECOGNIZED, new Annotation(SPAN_KIND_TAG_KEY, "unknown"));
       }};
 
+  static class WavefrontSpanAndLogs {
+    Span span;
+    SpanLogs spanLogs;
+
+    public WavefrontSpanAndLogs(Span span, SpanLogs spanLogs) {
+      this.span = span;
+      this.spanLogs = spanLogs;
+    }
+
+    public Span getSpan() {
+      return span;
+    }
+
+    public SpanLogs getSpanLogs() {
+      return spanLogs;
+    }
+  }
+
   public static void exportToWavefront(ExportTraceServiceRequest request,
                                        ReportableEntityHandler<Span, String> spanHandler,
                                        ReportableEntityHandler<SpanLogs, String> spanLogsHandler,
@@ -102,9 +120,9 @@ public class OtlpProtobufUtils {
       preprocessor = preprocessorSupplier.get();
     }
 
-    for (Pair<Span, SpanLogs> spanAndLogs : fromOtlpRequest(request, preprocessor, defaultSource)) {
-      Span span = spanAndLogs._1;
-      SpanLogs spanLogs = spanAndLogs._2;
+    for (WavefrontSpanAndLogs spanAndLogs : fromOtlpRequest(request, preprocessor, defaultSource)) {
+      Span span = spanAndLogs.getSpan();
+      SpanLogs spanLogs = spanAndLogs.getSpanLogs();
 
       if (wasFilteredByPreprocessor(span, spanHandler, preprocessor)) continue;
 
@@ -127,10 +145,10 @@ public class OtlpProtobufUtils {
   //   wfSender. This could be more efficient, and also more reliable in the event the loops
   //   below throw an error and we don't report any of the list.
   @VisibleForTesting
-  static List<Pair<Span, SpanLogs>> fromOtlpRequest(ExportTraceServiceRequest request,
+  static List<WavefrontSpanAndLogs> fromOtlpRequest(ExportTraceServiceRequest request,
                                                     @Nullable ReportableEntityPreprocessor preprocessor,
                                                     String defaultSource) {
-    List<Pair<Span, SpanLogs>> wfSpansAndLogs = Lists.newArrayList();
+    List<WavefrontSpanAndLogs> wfSpansAndLogs = Lists.newArrayList();
 
     for (ResourceSpans rSpans : request.getResourceSpansList()) {
       Resource resource = rSpans.getResource();
@@ -143,14 +161,8 @@ public class OtlpProtobufUtils {
         for (io.opentelemetry.proto.trace.v1.Span otlpSpan : ilSpans.getSpansList()) {
           OTLP_DATA_LOGGER.finest(() -> "Inbound OTLP Span: " + otlpSpan);
 
-          Pair<Span, SpanLogs> pair = transformAll(otlpSpan, resource.getAttributesList(),
-              iLibrary, preprocessor, defaultSource);
-          OTLP_DATA_LOGGER.finest(() -> "Converted Wavefront Span: " + pair._1);
-          if (!pair._2.getLogs().isEmpty()) {
-            OTLP_DATA_LOGGER.finest(() -> "Converted Wavefront SpanLogs: " + pair._2);
-          }
-
-          wfSpansAndLogs.add(pair);
+          wfSpansAndLogs.add(transformAll(otlpSpan, resource.getAttributesList(), iLibrary,
+              preprocessor, defaultSource));
         }
       }
     }
@@ -179,7 +191,7 @@ public class OtlpProtobufUtils {
   }
 
   @VisibleForTesting
-  static Pair<Span, SpanLogs> transformAll(io.opentelemetry.proto.trace.v1.Span otlpSpan,
+  static WavefrontSpanAndLogs transformAll(io.opentelemetry.proto.trace.v1.Span otlpSpan,
                                            List<KeyValue> resourceAttributes,
                                            InstrumentationLibrary iLibrary,
                                            @Nullable ReportableEntityPreprocessor preprocessor,
@@ -190,7 +202,12 @@ public class OtlpProtobufUtils {
       span.getAnnotations().add(new Annotation(SPAN_LOG_KEY, "true"));
     }
 
-    return Pair.of(span, logs);
+    OTLP_DATA_LOGGER.finest(() -> "Converted Wavefront Span: " + span);
+    if (!logs.getLogs().isEmpty()) {
+      OTLP_DATA_LOGGER.finest(() -> "Converted Wavefront SpanLogs: " + logs);
+    }
+
+    return new WavefrontSpanAndLogs(span, logs);
   }
 
   @VisibleForTesting

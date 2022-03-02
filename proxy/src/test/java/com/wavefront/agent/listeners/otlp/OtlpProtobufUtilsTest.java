@@ -73,6 +73,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -118,7 +119,9 @@ public class OtlpProtobufUtilsTest {
     );
     EasyMock.expect(
         OtlpProtobufUtils.fromOtlpRequest(otlpRequest, mockPreprocessor, "test-source")
-    ).andReturn(Arrays.asList(Pair.of(wfMinimalSpan, null)));
+    ).andReturn(
+        Arrays.asList(new OtlpProtobufUtils.WavefrontSpanAndLogs(wfMinimalSpan, new SpanLogs()))
+    );
     EasyMock.expect(
         OtlpProtobufUtils.wasFilteredByPreprocessor(eq(wfMinimalSpan), eq(mockSpanHandler),
             eq(mockPreprocessor))
@@ -591,15 +594,26 @@ public class OtlpProtobufUtilsTest {
   }
 
   @Test
+  public void transformEventsDoesNotReturnNullWhenGivenZeroOTLPEvents() {
+    Span otlpSpan = OtlpTestHelpers.otlpSpanGenerator().build();
+    assertEquals(0, otlpSpan.getEventsCount());
+
+    SpanLogs actual = OtlpProtobufUtils.transformEvents(otlpSpan, wfMinimalSpan);
+
+    assertNotNull(actual);
+    assertEquals(0, actual.getLogs().size());
+  }
+
+  @Test
   public void transformAllSetsAttributeWhenOtlpEventsExists() {
     Span.Event otlpEvent = OtlpTestHelpers.otlpSpanEvent(0);
     Span otlpSpan = OtlpTestHelpers.otlpSpanGenerator().addEvents(otlpEvent).build();
 
-    Pair<wavefront.report.Span, SpanLogs> actual =
+    OtlpProtobufUtils.WavefrontSpanAndLogs actual =
         transformAll(otlpSpan, emptyAttrs, null, null, "test-source");
 
-    assertThat(actual._1.getAnnotations(), hasKey("_spanLogs"));
-    assertThat(actual._2.getLogs(), not(empty()));
+    assertThat(actual.getSpan().getAnnotations(), hasKey("_spanLogs"));
+    assertThat(actual.getSpanLogs().getLogs(), not(empty()));
   }
 
   @Test
@@ -607,11 +621,11 @@ public class OtlpProtobufUtilsTest {
     Span otlpSpan = OtlpTestHelpers.otlpSpanGenerator().build();
     assertThat(otlpSpan.getEventsList(), empty());
 
-    Pair<wavefront.report.Span, SpanLogs> actual =
+    OtlpProtobufUtils.WavefrontSpanAndLogs actual =
         transformAll(otlpSpan, emptyAttrs, null, null, "test-source");
 
-    assertThat(actual._1.getAnnotations(), not(hasKey("_spanLogs")));
-    assertThat(actual._2.getLogs(), empty());
+    assertThat(actual.getSpan().getAnnotations(), not(hasKey("_spanLogs")));
+    assertThat(actual.getSpanLogs().getLogs(), empty());
   }
 
   @Test
