@@ -44,14 +44,15 @@ import static com.wavefront.agent.channel.ChannelUtils.errorMessageWithRootCause
 import static com.wavefront.agent.channel.ChannelUtils.writeHttpResponse;
 import static com.wavefront.agent.listeners.FeatureCheckUtils.SPAN_DISABLED;
 import static com.wavefront.agent.listeners.FeatureCheckUtils.isFeatureDisabled;
-import static com.wavefront.internal.SpanDerivedMetricsUtils.TRACING_DERIVED_PREFIX;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.reportHeartbeats;
 
 public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeable, Runnable {
   private final static Logger logger = Logger.getLogger(OtlpHttpHandler.class.getCanonicalName());
   private final String defaultSource;
   private final Set<Pair<Map<String, String>, String>> discoveredHeartbeatMetrics;
+  @Nullable
   private final WavefrontInternalReporter internalReporter;
+  @Nullable
   private final Supplier<ReportableEntityPreprocessor> preprocessorSupplier;
   private final Pair<SpanSampler, Counter> spanSamplerAndCounter;
   private final ScheduledExecutorService scheduledExecutorService;
@@ -97,15 +98,7 @@ public class OtlpHttpHandler extends AbstractHttpOnlyHandler implements Closeabl
         Executors.newScheduledThreadPool(1, new NamedThreadFactory("otlp-http-heart-beater"));
     scheduledExecutorService.scheduleAtFixedRate(this, 1, 1, TimeUnit.MINUTES);
 
-    if (wfSender != null) {
-      internalReporter = new WavefrontInternalReporter.Builder().
-          prefixedWith(TRACING_DERIVED_PREFIX).withSource(defaultSource).reportMinuteDistribution().
-          build(wfSender);
-      internalReporter.start(1, TimeUnit.MINUTES);
-    } else {
-      internalReporter = null;
-    }
-
+    this.internalReporter = OtlpProtobufUtils.createAndStartInternalReporter(sender);
   }
 
   @Override

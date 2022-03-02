@@ -39,7 +39,6 @@ import wavefront.report.SpanLogs;
 
 import static com.wavefront.agent.listeners.FeatureCheckUtils.SPAN_DISABLED;
 import static com.wavefront.agent.listeners.FeatureCheckUtils.isFeatureDisabled;
-import static com.wavefront.internal.SpanDerivedMetricsUtils.TRACING_DERIVED_PREFIX;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.reportHeartbeats;
 
 public class OtlpGrpcTraceHandler extends TraceServiceGrpc.TraceServiceImplBase implements Closeable, Runnable {
@@ -49,11 +48,13 @@ public class OtlpGrpcTraceHandler extends TraceServiceGrpc.TraceServiceImplBase 
   private final ReportableEntityHandler<SpanLogs, String> spanLogsHandler;
   @Nullable
   private final WavefrontSender wfSender;
+  @Nullable
   private final Supplier<ReportableEntityPreprocessor> preprocessorSupplier;
   private final Pair<SpanSampler, Counter> spanSamplerAndCounter;
   private final Pair<Supplier<Boolean>, Counter> spansDisabled;
   private final Pair<Supplier<Boolean>, Counter> spanLogsDisabled;
   private final String defaultSource;
+  @Nullable
   private final WavefrontInternalReporter internalReporter;
   private final Set<Pair<Map<String, String>, String>> discoveredHeartbeatMetrics;
   private final Set<String> traceDerivedCustomTagKeys;
@@ -92,14 +93,7 @@ public class OtlpGrpcTraceHandler extends TraceServiceGrpc.TraceServiceImplBase 
         Executors.newScheduledThreadPool(1, new NamedThreadFactory("otlp-grpc-heart-beater"));
     scheduledExecutorService.scheduleAtFixedRate(this, 1, 1, TimeUnit.MINUTES);
 
-    if (wfSender != null) {
-      internalReporter = new WavefrontInternalReporter.Builder().
-          prefixedWith(TRACING_DERIVED_PREFIX).withSource(defaultSource).reportMinuteDistribution().
-          build(wfSender);
-      internalReporter.start(1, TimeUnit.MINUTES);
-    } else {
-      internalReporter = null;
-    }
+    this.internalReporter = OtlpProtobufUtils.createAndStartInternalReporter(wfSender);
   }
 
   public OtlpGrpcTraceHandler(String handle,

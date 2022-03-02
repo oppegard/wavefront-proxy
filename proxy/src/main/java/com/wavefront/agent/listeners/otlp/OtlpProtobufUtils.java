@@ -10,6 +10,7 @@ import com.wavefront.agent.preprocessor.ReportableEntityPreprocessor;
 import com.wavefront.agent.sampler.SpanSampler;
 import com.wavefront.internal.reporter.WavefrontInternalReporter;
 import com.wavefront.sdk.common.Pair;
+import com.wavefront.sdk.common.WavefrontSender;
 import com.yammer.metrics.core.Counter;
 
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import static com.wavefront.agent.listeners.FeatureCheckUtils.SPANLOGS_DISABLED;
 import static com.wavefront.agent.listeners.FeatureCheckUtils.isFeatureDisabled;
 import static com.wavefront.common.TraceConstants.PARENT_KEY;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.ERROR_SPAN_TAG_VAL;
+import static com.wavefront.internal.SpanDerivedMetricsUtils.TRACING_DERIVED_PREFIX;
 import static com.wavefront.internal.SpanDerivedMetricsUtils.reportWavefrontGeneratedData;
 import static com.wavefront.sdk.common.Constants.APPLICATION_TAG_KEY;
 import static com.wavefront.sdk.common.Constants.CLUSTER_TAG_KEY;
@@ -430,6 +432,21 @@ public class OtlpProtobufUtils {
                                       Pair<Supplier<Boolean>, Counter> spanLogsDisabled) {
     return logsCount > 0 && !isFeatureDisabled(spanLogsDisabled._1, SPANLOGS_DISABLED,
         spanLogsDisabled._2, logsCount);
+  }
+
+  @Nullable
+  static WavefrontInternalReporter createAndStartInternalReporter(@Nullable  WavefrontSender sender) {
+    if (sender == null) return null;
+
+    /*
+    Internal reporter should have a custom source identifying where the internal metrics came from.
+    This mirrors the behavior in the Custom Tracing Listener and Jaeger Listeners.
+     */
+    WavefrontInternalReporter reporter = new WavefrontInternalReporter.Builder()
+        .prefixedWith(TRACING_DERIVED_PREFIX).withSource("otlp").reportMinuteDistribution()
+        .build(sender);
+    reporter.start(1, TimeUnit.MINUTES);
+    return reporter;
   }
 
   private static Map<String, String> mapFromAttributes(List<KeyValue> attributes) {
