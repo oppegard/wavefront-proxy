@@ -2,36 +2,34 @@ package com.wavefront.agent.listeners.otlp;
 
 import com.google.common.collect.Maps;
 import com.google.protobuf.ByteString;
-
 import com.wavefront.agent.preprocessor.PreprocessorRuleMetrics;
 import com.wavefront.agent.preprocessor.ReportableEntityPreprocessor;
 import com.wavefront.agent.preprocessor.SpanAddAnnotationIfNotExistsTransformer;
 import com.wavefront.agent.preprocessor.SpanBlockFilter;
 import com.wavefront.sdk.common.Pair;
-
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest;
+import io.opentelemetry.proto.common.v1.AnyValue;
+import io.opentelemetry.proto.common.v1.KeyValue;
+import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
+import io.opentelemetry.proto.metrics.v1.SummaryDataPoint;
+import io.opentelemetry.proto.trace.v1.InstrumentationLibrarySpans;
+import io.opentelemetry.proto.trace.v1.ResourceSpans;
+import io.opentelemetry.proto.trace.v1.Status;
 import org.apache.commons.compress.utils.Lists;
 import org.hamcrest.FeatureMatcher;
+import wavefront.report.Annotation;
+import wavefront.report.Span;
+import wavefront.report.SpanLog;
+import wavefront.report.SpanLogs;
 
+import javax.annotation.Nullable;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import javax.annotation.Nullable;
-
-import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest;
-import io.opentelemetry.proto.common.v1.AnyValue;
-import io.opentelemetry.proto.common.v1.KeyValue;
-import io.opentelemetry.proto.trace.v1.InstrumentationLibrarySpans;
-import io.opentelemetry.proto.trace.v1.ResourceSpans;
-import io.opentelemetry.proto.metrics.v1.Metric;
-import io.opentelemetry.proto.trace.v1.Status;
-import wavefront.report.Annotation;
-import wavefront.report.Span;
-import wavefront.report.SpanLog;
-import wavefront.report.SpanLogs;
 
 import static com.wavefront.sdk.common.Constants.APPLICATION_TAG_KEY;
 import static com.wavefront.sdk.common.Constants.SERVICE_TAG_KEY;
@@ -241,16 +239,30 @@ public class OtlpTestHelpers {
     Map<String, String> annotationMap = Maps.newHashMap();
     for (Annotation annotation : annotationList) {
       annotationMap.put(annotation.getKey(), annotation.getValue());
-  }
+    }
     assertEquals(annotationList.size(), annotationMap.size());
     return annotationMap;
   }
 
   public static io.opentelemetry.proto.metrics.v1.Metric.Builder otlpMetricGenerator() {
-    Metric.Builder builder = io.opentelemetry.proto.metrics.v1.Metric.newBuilder();
-    builder.setName("test");
-    return builder;
+    return io.opentelemetry.proto.metrics.v1.Metric.newBuilder().setName("test");
   }
+
+  public static io.opentelemetry.proto.metrics.v1.Metric.Builder otlpGaugeGenerator(List<NumberDataPoint> points) {
+    return io.opentelemetry.proto.metrics.v1.Metric.newBuilder()
+        .setName("test")
+        .setGauge(io.opentelemetry.proto.metrics.v1.Gauge.newBuilder().addAllDataPoints(points).build());
+  }
+
+  public static io.opentelemetry.proto.metrics.v1.Metric.Builder otlpSumGenerator(List<NumberDataPoint> points) {
+    return io.opentelemetry.proto.metrics.v1.Metric.newBuilder()
+        .setName("test")
+        .setSum(io.opentelemetry.proto.metrics.v1.Sum.newBuilder()
+            .setAggregationTemporality(io.opentelemetry.proto.metrics.v1.AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
+            .addAllDataPoints(points)
+            .build());
+  }
+
 
   public static wavefront.report.ReportPoint.Builder wfReportPointGenerator() {
     return wavefront.report.ReportPoint.newBuilder().setMetric("test").setTimestamp(0).setValue(0.0);
@@ -258,5 +270,21 @@ public class OtlpTestHelpers {
 
   public static wavefront.report.ReportPoint.Builder wfReportPointGenerator(List<Annotation> annotations) {
     return wfReportPointGenerator().setAnnotations(annotationListToMap(annotations));
+  }
+
+  public static io.opentelemetry.proto.metrics.v1.Metric.Builder otlpSummaryGenerator(SummaryDataPoint point) {
+    return io.opentelemetry.proto.metrics.v1.Metric.newBuilder()
+        .setName("test")
+        .setSummary(io.opentelemetry.proto.metrics.v1.Summary.newBuilder()
+            .addDataPoints(point)
+            .build());
+  }
+
+  public static io.opentelemetry.proto.metrics.v1.Metric.Builder otlpSummaryGenerator(Collection<SummaryDataPoint.ValueAtQuantile> quantiles) {
+    return otlpSummaryGenerator(SummaryDataPoint.newBuilder().addAllQuantileValues(quantiles).build());
+  }
+
+  public static List<wavefront.report.ReportPoint> justThePointsNamed(String name, Collection<wavefront.report.ReportPoint> points) {
+    return points.stream().filter(p -> p.getMetric().equals(name)).collect(Collectors.toList());
   }
 }
