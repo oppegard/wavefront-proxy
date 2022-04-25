@@ -1,5 +1,6 @@
 package com.wavefront.agent.listeners.otlp;
 
+import com.google.common.collect.ImmutableMap;
 import com.wavefront.agent.handlers.MockReportableEntityHandlerFactory;
 import com.wavefront.agent.handlers.ReportableEntityHandler;
 import com.wavefront.agent.preprocessor.ReportableEntityPreprocessor;
@@ -13,6 +14,8 @@ import io.opentelemetry.proto.metrics.v1.Metric;
 import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
 import io.opentelemetry.proto.metrics.v1.ResourceMetrics;
 import io.opentelemetry.proto.metrics.v1.Sum;
+import io.opentelemetry.proto.metrics.v1.Summary;
+import io.opentelemetry.proto.metrics.v1.SummaryDataPoint;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,8 +40,8 @@ public class OtlpMetricsTest {
     public void onCompleted() {
     }
   };
-  private OtlpGrpcMetricsHandler subject;
   private final ReportableEntityHandler<ReportPoint, String> mockMetricsHandler = MockReportableEntityHandlerFactory.getMockReportPointHandler();
+  private OtlpGrpcMetricsHandler subject;
 
   @Before
   public void setup() {
@@ -119,6 +122,114 @@ public class OtlpMetricsTest {
         .build();
     wavefront.report.ReportPoint wfMetric = OtlpTestHelpers.wfReportPointGenerator()
         .setMetric("test-sum")
+        .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
+        .setValue(12.3)
+        .build();
+    mockMetricsHandler.report(wfMetric);
+    EasyMock.expectLastCall();
+
+    EasyMock.replay(mockMetricsHandler);
+
+    ResourceMetrics resourceMetrics = ResourceMetrics.newBuilder().addInstrumentationLibraryMetrics(InstrumentationLibraryMetrics.newBuilder().addMetrics(otelMetric).build()).build();
+    ExportMetricsServiceRequest request = ExportMetricsServiceRequest.newBuilder().addResourceMetrics(resourceMetrics).build();
+    subject.export(request, emptyStreamObserver);
+
+    EasyMock.verify(mockMetricsHandler);
+  }
+
+  @Test
+  public void simpleSummary() {
+    long epochTime = 1515151515L;
+    EasyMock.reset(mockMetricsHandler);
+    SummaryDataPoint point = SummaryDataPoint.newBuilder()
+        .setSum(12.3)
+        .setCount(21)
+        .addQuantileValues(SummaryDataPoint.ValueAtQuantile.newBuilder()
+            .setQuantile(.5)
+            .setValue(242.3)
+            .build())
+        .setTimeUnixNano(TimeUnit.SECONDS.toNanos(epochTime)).build();
+    Summary otelSummary = Summary.newBuilder()
+        .addDataPoints(point)
+        .build();
+    Metric otelMetric = Metric.newBuilder()
+        .setSummary(otelSummary)
+        .setName("test-summary")
+        .build();
+    mockMetricsHandler.report(OtlpTestHelpers.wfReportPointGenerator()
+        .setMetric("test-summary_sum")
+        .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
+        .setValue(12.3)
+        .build());
+    EasyMock.expectLastCall();
+    mockMetricsHandler.report(OtlpTestHelpers.wfReportPointGenerator()
+        .setMetric("test-summary_count")
+        .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
+        .setValue(21)
+        .build());
+    EasyMock.expectLastCall();
+    mockMetricsHandler.report(OtlpTestHelpers.wfReportPointGenerator()
+        .setMetric("test-summary")
+        .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
+        .setValue(242.3)
+        .setAnnotations(ImmutableMap.of("quantile", "0.5"))
+        .build());
+    EasyMock.expectLastCall();
+
+    EasyMock.replay(mockMetricsHandler);
+
+    ResourceMetrics resourceMetrics = ResourceMetrics.newBuilder().addInstrumentationLibraryMetrics(InstrumentationLibraryMetrics.newBuilder().addMetrics(otelMetric).build()).build();
+    ExportMetricsServiceRequest request = ExportMetricsServiceRequest.newBuilder().addResourceMetrics(resourceMetrics).build();
+    subject.export(request, emptyStreamObserver);
+
+    EasyMock.verify(mockMetricsHandler);
+  }
+
+  @Test
+  public void monotonicDeltaSum() {
+    long epochTime = 1515151515L;
+    EasyMock.reset(mockMetricsHandler);
+    Sum otelSum = Sum.newBuilder()
+        .setIsMonotonic(true)
+        .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA)
+        .addDataPoints(NumberDataPoint.newBuilder().setAsDouble(12.3).setTimeUnixNano(TimeUnit.SECONDS.toNanos(epochTime)).build())
+        .build();
+    Metric otelMetric = Metric.newBuilder()
+        .setSum(otelSum)
+        .setName("test-sum")
+        .build();
+    wavefront.report.ReportPoint wfMetric = OtlpTestHelpers.wfReportPointGenerator()
+        .setMetric("∆test-sum")
+        .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
+        .setValue(12.3)
+        .build();
+    mockMetricsHandler.report(wfMetric);
+    EasyMock.expectLastCall();
+
+    EasyMock.replay(mockMetricsHandler);
+
+    ResourceMetrics resourceMetrics = ResourceMetrics.newBuilder().addInstrumentationLibraryMetrics(InstrumentationLibraryMetrics.newBuilder().addMetrics(otelMetric).build()).build();
+    ExportMetricsServiceRequest request = ExportMetricsServiceRequest.newBuilder().addResourceMetrics(resourceMetrics).build();
+    subject.export(request, emptyStreamObserver);
+
+    EasyMock.verify(mockMetricsHandler);
+  }
+
+  @Test
+  public void nonmonotonicDeltaSum() {
+    long epochTime = 1515151515L;
+    EasyMock.reset(mockMetricsHandler);
+    Sum otelSum = Sum.newBuilder()
+        .setIsMonotonic(false)
+        .setAggregationTemporality(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA)
+        .addDataPoints(NumberDataPoint.newBuilder().setAsDouble(12.3).setTimeUnixNano(TimeUnit.SECONDS.toNanos(epochTime)).build())
+        .build();
+    Metric otelMetric = Metric.newBuilder()
+        .setSum(otelSum)
+        .setName("test-sum")
+        .build();
+    wavefront.report.ReportPoint wfMetric = OtlpTestHelpers.wfReportPointGenerator()
+        .setMetric("∆test-sum")
         .setTimestamp(TimeUnit.SECONDS.toMillis(epochTime))
         .setValue(12.3)
         .build();
