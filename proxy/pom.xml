@@ -48,8 +48,9 @@
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
     <java.version>1.8</java.version>
+    <grpc.version>1.41.2</grpc.version>
     <netty.version>4.1.71.Final</netty.version>
-    <opentelemetry.version>1.6.0-alpha</opentelemetry.version>
+    <opentelemetry.version>1.14.0</opentelemetry.version>
     <powermock.version>2.0.9</powermock.version>
 
     <doclint>none</doclint>
@@ -380,32 +381,16 @@
       </dependency>
       <dependency>
         <groupId>io.grpc</groupId>
-        <artifactId>grpc-netty</artifactId>
-        <version>1.38.1</version>
-        <type>jar</type>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-protobuf</artifactId>
-        <version>1.38.1</version>
-        <scope>compile</scope>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-stub</artifactId>
-        <version>1.38.1</version>
-        <scope>compile</scope>
+        <artifactId>grpc-bom</artifactId>
+        <version>${grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-buffer</artifactId>
         <version>${netty.version}</version>
         <scope>compile</scope>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-api</artifactId>
-        <version>1.41.2</version>
       </dependency>
       <dependency>
         <groupId>io.jaegertracing</groupId>
@@ -447,11 +432,6 @@
         <groupId>io.netty</groupId>
         <artifactId>netty-common</artifactId>
         <version>4.1.74.Final</version>
-      </dependency>
-      <dependency>
-        <groupId>io.grpc</groupId>
-        <artifactId>grpc-context</artifactId>
-        <version>1.41.2</version>
       </dependency>
       <dependency>
         <groupId>io.opentracing</groupId>
@@ -513,7 +493,7 @@
       </dependency>
       <dependency>
         <groupId>io.opentelemetry</groupId>
-        <artifactId>opentelemetry-bom-alpha</artifactId>
+        <artifactId>opentelemetry-bom</artifactId>
         <version>${opentelemetry.version}</version>
         <type>pom</type>
         <scope>import</scope>
@@ -612,19 +592,13 @@
     </dependency>
     <dependency>
       <groupId>io.opentelemetry</groupId>
-      <artifactId>opentelemetry-exporters-jaeger</artifactId>
-      <version>0.4.1</version>
+      <artifactId>opentelemetry-exporter-jaeger-proto</artifactId>
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>io.opentelemetry</groupId>
+      <groupId>io.opentelemetry.proto</groupId>
       <artifactId>opentelemetry-proto</artifactId>
-      <version>${opentelemetry.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.opentelemetry</groupId>
-      <artifactId>opentelemetry-semconv</artifactId>
-      <version>${opentelemetry.version}</version>
+      <version>0.17.0-alpha</version>
     </dependency>
     <dependency>
       <groupId>com.uber.tchannel</groupId>
@@ -724,7 +698,25 @@
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
+      <artifactId>grpc-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-context</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
       <artifactId>grpc-netty</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>com.google.protobuf</groupId>
